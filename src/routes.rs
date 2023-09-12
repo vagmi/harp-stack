@@ -1,3 +1,4 @@
+use tera::{Tera, Context};
 use tower_http::{trace::TraceLayer, compression::CompressionLayer, cors::CorsLayer};
 use hyper::{http::{Request, header::{ACCEPT, ACCEPT_ENCODING, 
                                      AUTHORIZATION, CONTENT_TYPE, ORIGIN}}, 
@@ -50,22 +51,38 @@ async fn get_todos(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
-#[axum::debug_handler]
-async fn show_index(State(app_state): State<AppState>) -> impl IntoResponse {
-    let res = app_state.tera.render("index.html", &tera::Context::new());
+fn render_template(name: &str, ctx: &tera::Context, tera: Tera) -> (StatusCode, Html<String>) {
+    let res = tera.render(name, ctx);
     match res {
-        Ok(body) => (StatusCode::OK, Html(body)).into_response(),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Html(r#"
+        Ok(body) => (StatusCode::OK, Html(body)),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, Html(format!(r#"
         <html>
             <head>
                 <title>Oops.</title>
             </head>
             <body>
                 <h1>Something really bad happened</h1>
+                {:?}
             </body>
-        </html>"#)).into_response()
+        </html>"#, err)))
     }
+}
 
+async fn show_index(State(app_state): State<AppState>) -> (StatusCode, Html<String>) {
+    let local_pool = app_state.pool.clone();
+    let result = sqlx::query_as::<_,Todo>("select * from todos")
+                     .fetch_all(&local_pool).await;
+    match result {
+        Ok(todos) => {
+            let mut ctx = Context::new();
+            ctx.insert("todos", &todos);
+            render_template("index.html", &ctx, app_state.tera.clone())
+        },
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Html(String::from(r#"Error querying for todos"#))
+        )
+    }
 }
 
 pub fn build_router(app_state: AppState) -> Router {

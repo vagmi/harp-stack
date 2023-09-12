@@ -5,5 +5,10 @@
 {% endblock %}
 
 {% block content %}
-<h1>Hello from Tera HTML</h1>
+<h1>Hello updated Tera HTML</h1>
+<ul>
+{% for todo in todos %}
+    <li>{{ todo.title }}</li>
+{% endfor %}
+</ul>
 {% endblock %}
