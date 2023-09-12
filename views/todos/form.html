@@ -1,0 +1,9 @@
+<form hx-post="/todo" method="post" >
+<input type="text" name="title" placeholder="Enter a todo">
+<input type="submit" value="Add Todo">
+<ul id="tasks">
+{% for todo in todos %}
+    <li>{{ todo.title }}</li>
+{% endfor %}
+</ul>
+</form>

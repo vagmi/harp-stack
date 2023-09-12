@@ -1,12 +1,14 @@
+use sqlx::PgPool;
 use tera::{Tera, Context};
 use tower_http::{trace::TraceLayer, compression::CompressionLayer, cors::CorsLayer};
 use hyper::{http::{Request, header::{ACCEPT, ACCEPT_ENCODING, 
                                      AUTHORIZATION, CONTENT_TYPE, ORIGIN}}, 
            Body, StatusCode};
-use axum::{Router, routing::{get, post}, Json, extract::State, response::{IntoResponse, Html}};
+use axum::{Router, routing::{get, post}, Json, extract::State, response::{IntoResponse, Html}, Form};
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use anyhow::Result;
 
 use crate::app_state::AppState;
 
@@ -21,22 +23,34 @@ struct Todo {
 #[derive(Debug, Serialize, Deserialize)]
 struct CreateTodo {
     title: String,
-    completed: bool,
 }
 
 
-async fn create_todo(
-    State(state): State<AppState>,
-    Json(payload): Json<CreateTodo>,
-) -> impl IntoResponse {
-    let local_pool = state.pool.clone();
-    let todo = sqlx::query_as::<_,Todo>("insert into todos (title, completed) values ($1, $2) returning *")
+async fn insert_todo(payload: &CreateTodo, pool: PgPool) -> Result<Vec<Todo>> {
+    sqlx::query_as::<_,Todo>("insert into todos (title) values ($1) returning *")
         .bind(&payload.title)
-        .bind(&payload.completed)
-        .fetch_one(&local_pool).await;
-     match todo {
-         Ok(todo) => (StatusCode::OK, Json(todo)).into_response(),
-         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": err.to_string()}))).into_response(),
+        .fetch_one(&pool).await?;
+    let todos = sqlx::query_as::<_,Todo>("select * from todos")
+                     .fetch_all(&pool).await?;
+    Ok(todos)
+}
+async fn create_todo(
+    State(app_state): State<AppState>,
+    Form(payload): Form<CreateTodo>,
+) -> (StatusCode, Html<String>) {
+    let local_pool = app_state.pool.clone();
+    let todos = insert_todo(&payload, local_pool).await;
+     match todos {
+         Ok(todos) => {
+            let mut ctx = Context::new();
+            ctx.insert("todos", &todos);
+            render_template("todos/form.html", &ctx, app_state.tera.clone())
+
+         },
+         Err(_) => (
+             StatusCode::INTERNAL_SERVER_ERROR,
+             Html(String::from(r#"Error querying for todos"#))
+         )
      }
 }
 
@@ -106,7 +120,7 @@ pub fn build_router(app_state: AppState) -> Router {
 
     // Wrap an `axum::Router` with our state, CORS, Tracing, & Compression layers
     Router::new()
-        .route("/todos", post(create_todo))
+        .route("/todo", post(create_todo))
         .route("/todos", get(get_todos))
         .route("/", get(show_index))
         .layer(cors_layer)
