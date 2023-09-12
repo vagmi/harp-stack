@@ -1,0 +1,8 @@
+{% if todo.completed %}
+{% set completed = 'completed' %}
+{% else %}
+{% set completed = '' %}
+{% endif %}
+<li class="{{completed}}" 
+    hx-swap="outerHTML"
+    hx-post="/todos/{{todo.id}}/toggle">{{ todo.title }}</li>

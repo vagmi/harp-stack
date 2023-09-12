@@ -4,7 +4,7 @@ use tower_http::{trace::TraceLayer, compression::CompressionLayer, cors::CorsLay
 use hyper::{http::{Request, header::{ACCEPT, ACCEPT_ENCODING, 
                                      AUTHORIZATION, CONTENT_TYPE, ORIGIN}}, 
            Body, StatusCode};
-use axum::{Router, routing::{get, post}, Json, extract::State, response::{IntoResponse, Html}, Form};
+use axum::{Router, routing::{get, post}, Json, extract::{State, Path}, response::{IntoResponse, Html}, Form, debug_handler};
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -34,6 +34,34 @@ async fn insert_todo(payload: &CreateTodo, pool: PgPool) -> Result<Vec<Todo>> {
                      .fetch_all(&pool).await?;
     Ok(todos)
 }
+
+async fn toggle_todo(todo_id: i32, pool: PgPool) -> Result<Todo> {
+    let todo = sqlx::query_as::<_,Todo>("update todos set completed = not completed where id=$1 returning *")
+        .bind(todo_id)
+        .fetch_one(&pool).await?;
+    Ok(todo)
+}
+
+#[debug_handler]
+async fn toggle_status(
+    State(app_state): State<AppState>,
+    Path(id): Path<i32>, 
+    ) -> (StatusCode, Html<String>) {
+    let todo = toggle_todo(id, app_state.pool.clone()).await;
+    match todo  {
+        Ok(todo) => {
+            let mut ctx = Context::new();
+            ctx.insert("todo", &todo);
+            render_template("todos/todo.html", &ctx, app_state.tera.clone())
+        },
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Html(String::from(r#"Error querying for todos"#))
+        )
+    }
+}
+
+#[debug_handler]
 async fn create_todo(
     State(app_state): State<AppState>,
     Form(payload): Form<CreateTodo>,
@@ -122,6 +150,7 @@ pub fn build_router(app_state: AppState) -> Router {
     Router::new()
         .route("/todo", post(create_todo))
         .route("/todos", get(get_todos))
+        .route("/todos/:id/toggle", post(toggle_status))
         .route("/", get(show_index))
         .layer(cors_layer)
         .layer(trace_layer)
