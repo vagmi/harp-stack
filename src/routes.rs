@@ -39,6 +39,7 @@ async fn create_todo(
      }
 }
 
+#[axum::debug_handler]
 async fn get_todos(State(state): State<AppState>) -> impl IntoResponse {
     let local_pool = state.pool.clone();
     let todos = sqlx::query_as::<_,Todo>("select * from todos")
@@ -49,16 +50,22 @@ async fn get_todos(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
-async fn show_index() -> impl IntoResponse {
-    (StatusCode::OK, Html(r#"
+#[axum::debug_handler]
+async fn show_index(State(app_state): State<AppState>) -> impl IntoResponse {
+    let res = app_state.tera.render("index.html", &tera::Context::new());
+    match res {
+        Ok(body) => (StatusCode::OK, Html(body)).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Html(r#"
         <html>
             <head>
-                <title>Todo App</title>
+                <title>Oops.</title>
             </head>
             <body>
-                <h1>Todo App</h1>
+                <h1>Something really bad happened</h1>
             </body>
-        </html>"#))
+        </html>"#)).into_response()
+    }
+
 }
 
 pub fn build_router(app_state: AppState) -> Router {
