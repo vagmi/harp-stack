@@ -1,9 +1,9 @@
 use sqlx::PgPool;
 use tera::{Tera, Context};
+use axum::{http::StatusCode, body::Body};
 use tower_http::{trace::TraceLayer, compression::CompressionLayer, cors::CorsLayer};
-use hyper::{http::{Request, header::{ACCEPT, ACCEPT_ENCODING, 
-                                     AUTHORIZATION, CONTENT_TYPE, ORIGIN}}, 
-           Body, StatusCode};
+use http::{Request, header::{ACCEPT, ACCEPT_ENCODING, 
+                                     AUTHORIZATION, CONTENT_TYPE, ORIGIN}};
 use axum::{Router, routing::{get, post}, Json, extract::{State, Path}, response::{IntoResponse, Html}, Form, debug_handler};
 
 use serde::{Deserialize, Serialize};

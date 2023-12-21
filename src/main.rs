@@ -3,6 +3,7 @@ mod routes;
 
 use anyhow::Result;
 use app_state::AppState;
+use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -19,9 +20,8 @@ async fn main() -> Result<()> {
 
     #[cfg(debug_assertions)]
     {
-        let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
-        axum::Server::bind(&addr)
-            .serve(app.into_make_service())
+        let listener = TcpListener::bind("0.0.0.0:3000").await?;
+        axum::serve(listener, app.into_make_service())
             .await
             .unwrap();
     }
