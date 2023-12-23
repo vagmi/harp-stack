@@ -3,7 +3,6 @@ mod routes;
 
 use anyhow::Result;
 use app_state::AppState;
-use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -20,6 +19,7 @@ async fn main() -> Result<()> {
 
     #[cfg(debug_assertions)]
     {
+        use tokio::net::TcpListener;
         let listener = TcpListener::bind("0.0.0.0:3000").await?;
         axum::serve(listener, app.into_make_service())
             .await
